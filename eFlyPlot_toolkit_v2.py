@@ -20,6 +20,7 @@ import copy
 import eFlyPlot_layout
 from collections import Counter
 import test_cyto
+import eFlyPlot_analysis as eFlyA
 
 ##Available datasets: ['hemibrain:v0.9', 'hemibrain:v1.0.1', 'hemibrain:v1.1', 'hemibrain:v1.2.1']
 '''
@@ -39,7 +40,7 @@ class CoordinateCollection:
         self.FC_swc_path = "Data/FC_skeletons/"
         self.template = template
         if template == 'FlyEM':
-            self.neuropil_path = "EM_neuropil/"
+            self.neuropil_path = "FlyEM_neuropil/"
         elif template == 'FlyCircuit':
             self.neuropil_path = ""
         else:
@@ -111,6 +112,10 @@ class neuprint_query_tool:
         self.connecting_neuprint_server()
         self.initialize_path()
         self.get_query_phrase()
+        self.info_name_list = []
+        self.conn_name_list = []
+        self.syn_name_list = []
+
 
     def initialize_path(self):
         #### DATA ###############
@@ -787,6 +792,7 @@ class neuprint_query_tool:
                 final_results = final_downn_result
             else:
                 final_results = final_upn_result
+            # self.syn_name_list.append(f"{file_name[:-1].replace('*', 's')}_{self.version}.xlsx")
         return final_results
 
     def generate_file_name_syn(self,upn,upn_w,downn,downn_w,query,roi):
@@ -828,10 +834,14 @@ class neuprint_query_tool:
             if roi == "noinfo":
                 roi = ""
             file_name = self.generate_file_name_syn(upn,upn_w,downn,downn_w,query,roi)
+            tmp_file_name = copy.deepcopy(file_name).split("/")[-1]
+            if tmp_file_name not in self.syn_name_list:
+                self.syn_name_list.append(tmp_file_name)
             if os.path.isfile(file_name):
                 data = pd.read_excel(file_name)
             else:
                 data = self.get_synapse_all(upn,upn_w,downn,downn_w,query,roi)
+
             x,y,z = np.array(data[ 'down_syn_coordinate_x'].values.tolist()),\
                     np.array(data[ 'down_syn_coordinate_y'].values.tolist()),np.array(data[ 'down_syn_coordinate_z'].values.tolist())
             fig.add_trace(go.Scatter3d(x=x, y=y, z=z,
@@ -920,6 +930,7 @@ class neuprint_query_tool:
             intersection_data = self.get_result_intersection(result_list,first_loc_index=3)
             results = Df(data=intersection_data, columns=columns)
             results.to_excel(f"{self.connection_data_path}{file_name[:-1].replace('*', 's')}_{self.version}.xlsx")
+            self.conn_name_list.append(f"{file_name[:-1].replace('*', 's')}_{self.version}.xlsx")
 
         else:
             downn_result_list = []
@@ -966,6 +977,8 @@ class neuprint_query_tool:
                 intersection_data = self.get_result_intersection(upn_result_list,first_loc_index=3)
             results = Df(data=intersection_data, columns=columns)
             results.to_excel(f"{self.connection_data_path}{file_name[:-1].replace('*','s')}_{self.version}.xlsx")
+            self.conn_name_list.append(f"{file_name[:-1].replace('*', 's')}_{self.version}.xlsx")
+
         return results
 
     def get_neuron_info_all(self,query,roi,upn,upn_w,downn,down_w, result_info):
@@ -983,9 +996,7 @@ class neuprint_query_tool:
                     "This query fails. The reason may result from bad query request or the neuprint restriction. You can try it again.")
                 return
                 pass
-            file_name = f"{self.other_basic_info_path}{file_name[:-1].replace('*','s')}_{self.version}.xlsx"
-            print(file_name)
-            results.to_excel(file_name)
+            results.to_excel(f"{self.other_basic_info_path}{file_name[:-1].replace('*','s')}_{self.version}.xlsx")
         else:
             columns = []
             if 'id' in result_info:
@@ -1040,80 +1051,7 @@ class neuprint_query_tool:
             print('finish in',intersection_data)
             results = Df(data=intersection_data, columns=columns)
             results.to_excel(f"{self.other_basic_info_path}{file_name[:-1].replace('*','s')}_{self.version}.xlsx")
-        # elif not downn:
-        #     if not upn_w:
-        #         upn_w = 0
-        #     condition, r_type, file_name = self.generate_condition_neuron_info(query, roi, result_info, 'down.','neuronInfo')
-        #     group = upn.split(" ")
-        #     file_name = file_name + "downstream_of_"
-        #     for i in group:
-        #         file_name = file_name + i + "_"
-        #         condition = condition + self.generate_condition_neuron(i, 'up.') + ' AND '
-        #     condition = condition + f' w.weight > {upn_w}'
-        #     file_name = file_name + f"w_{upn_w}_"
-        #     q = f"""{self.q_con}{condition}{r_type}"""
-        #     print("HERE3")
-        #     print(q)
-        #     try:
-        #         results = self.c.fetch_custom(q)
-        #     except:
-        #         print(
-        #             "This query fails. The reason may result from bad query request or the neuprint restriction. You can try it again.")
-        #         pass
-        #     results.to_excel(f"{self.other_basic_info_path}{file_name[:-1].replace('*','s')}_{self.version}.xlsx")
-        # else:
-        #     if not down_w:
-        #         down_w = 0
-        #     if not upn_w:
-        #         upn_w = 0
-        #     condition, r_type, file_name = self.generate_condition_neuron_info(query, roi, result_info, 'up.','neuronInfo_')
-        #     group = downn.split(" ")
-        #     file_name = file_name + "upstream_of_"
-        #     for i in group:
-        #         file_name = file_name + i + "_"
-        #         condition = condition + self.generate_condition_neuron(i, 'down.') + ' AND '
-        #     condition = condition + f' w.weight > {down_w}'
-        #     file_name = file_name + f"w_{down_w}_"
-        #     q = f"""{self.q_con}{condition}{r_type}"""
-        #     print("HERE4")
-        #     print(q)
-        #     try:
-        #         results_1 = self.c.fetch_custom(q).values.tolist()
-        #     except:
-        #         print("This query fails. The reason may result from bad query request or the neuprint restriction. You can try it again.")
-        #         return
-        #         pass
-        #     condition, r_type, file_name_tmp = self.generate_condition_neuron_info(query, roi, result_info, 'down.','neuronInfo_')
-        #     group = upn.split(" ")
-        #     file_name = file_name + "downstream_of_"
-        #     for i in group:
-        #         file_name = file_name + i + "_"
-        #         condition = condition + self.generate_condition_neuron(i, 'up.') + ' AND '
-        #     condition = condition + f' w.weight > {upn_w}'
-        #     file_name = file_name + f"w_{upn_w}_"
-        #     q = f"""{self.q_con}{condition}{r_type}"""
-        #     print(q)
-        #     try:
-        #         results_2 = self.c.fetch_custom(q).values.tolist()
-        #     except:
-        #         print("This query fails. The reason may result from bad query request or the neuprint restriction. You can try it again.")
-        #         return
-        #         pass
-        #     neuron_list = [i[0] for i in results_1]
-        #     intersection_data = []
-        #     for neuron_data in results_2:
-        #         if neuron_data[0] in neuron_list:
-        #             intersection_data.append(neuron_data)
-        #     columns = []
-        #     if 'id' in result_info:
-        #         columns.append('n.bodyId')
-        #     if 'type' in result_info:
-        #         columns.append('n.type')
-        #         columns.append('n.instance')
-        #     if 'roi' in result_info:
-        #         columns.append("n.roiInfo ")
-        #     results = Df(data=intersection_data,columns=columns)
-        #     results.to_excel(f"{self.other_basic_info_path}{file_name[:-1].replace('*','s')}_{self.version}.xlsx")
+        self.info_name_list.append(f"{file_name[:-1].replace('*','s')}_{self.version}.xlsx")
         return results
 
     def get_neuron_info(self,line):
@@ -1360,6 +1298,7 @@ class Template_brain(CoordinateCollection):
     '''
     def __init__(self, template='FlyEM', offline=False):
         self.neuprint_tool = neuprint_query_tool(template=template)
+        self.brain_template_warping_tool = eFlyA.brain_template_warping_tool()
         print(self.neuprint_tool.version)
         self.xyz_collection = {}
         self.swc_parent_collection = {}
@@ -1368,6 +1307,8 @@ class Template_brain(CoordinateCollection):
         self.initialize_path()
         self.load_neuropil()
         self.neuropil_history = []
+        self.dendro = eFlyA.generate_synaptic_dendrogram()
+
         if offline == False:
             self.neuprint_tool.connecting_neuprint_server()
         if os.path.isfile(f"{self.tmp_path}conn_tmp.pickle"):
@@ -1398,6 +1339,7 @@ class Template_brain(CoordinateCollection):
         self.skeleton_path = f"{self.data_path}{self.template}_skeleton/"
         self.neuropil_path = f"{self.data_path}{self.template}_neuropil/"
         self.all_neuropil_mesh = self.obtain_neuropil_mesh() ##################################################
+        self.warping_xyz_path = f"{self.data_path}xyz/"
 
         if not os.path.isdir(self.data_path):
             os.mkdir(self.data_path)
@@ -1697,7 +1639,8 @@ class eFlyPlot_environment:
                 eFlyPlot_layout.get_tab_for_basic_info(),
                 eFlyPlot_layout.get_tab_for_neuron_connection(),
                 test_cyto.get_tab_cytoscape_layout(),
-                eFlyPlot_layout.get_tab_for_neuron_synapses(neuropil_options=list(self.brain_space.all_neuropil_mesh.keys()))
+                eFlyPlot_layout.get_tab_for_neuron_synapses(neuropil_options=list(self.brain_space.all_neuropil_mesh.keys())),
+                eFlyPlot_layout.get_tab_for_synapse_analysis()
             ])
         ])
         return app
@@ -1705,16 +1648,18 @@ class eFlyPlot_environment:
     def get_layout_of_3dObject(self):
         layout = go.Layout(
             title="eFlyPlot",
-            scene=plotly.graph_objs.layout.Scene(bgcolor='white',  # Sets background color to white
+            scene=plotly.graph_objs.layout.Scene(bgcolor='rgba(0,0,0,0)',  # Sets background color to white
                                                  xaxis=plotly.graph_objs.layout.scene.XAxis(showgrid=False,
-                                                                                            zeroline=False),
+                                                                                            zeroline=False,backgroundcolor="rgba(0,0,0,0)"),
                                                  yaxis=plotly.graph_objs.layout.scene.YAxis(showgrid=False,
-                                                                                            zeroline=False),
+                                                                                            zeroline=False,backgroundcolor="rgba(0,0,0,0)"),
                                                  zaxis=plotly.graph_objs.layout.scene.ZAxis(showgrid=False,
-                                                                                            zeroline=False),
+                                                                                            zeroline=False,backgroundcolor="rgba(0,0,0,0)"),
                                                  ),
-            plot_bgcolor='white',
-            paper_bgcolor='white',
+            # plot_bgcolor='white',
+            # paper_bgcolor='white',
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
             width=1500,
             height=1000,
             scene_camera=dict(

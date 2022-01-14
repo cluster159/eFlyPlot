@@ -9,10 +9,9 @@ import plotly.graph_objects as go
 from dash.dependencies import Input, Output,State
 import dash_cytoscape as cyto
 import json
-import dash_cytoscape as cyto
 import dash_reusable_components as drc
 import test_cyto
-
+import dash_extensions as des
 def get_neuropil_layout(neuropil_options=[{'label':'CA(R)','value':'CA(R)'}],template='FlyEM'):
     neuropil_options = [{'label':f"{neuropil}",'value':f"{neuropil}"} for neuropil in neuropil_options]
     neuropil_layout = html.Div([
@@ -72,13 +71,13 @@ def initialize_eFlyPlot_history():
     history = {'NeuronInfo': {'info_brain_space': 'FlyEM', 'info_version': "v1.2.1", "info_type": [], "info_roi": [],
                     "info_upstream_neuron": [],
                     "info_upstream_neuron_weight": 0, "info_downstream_neuron": [], "info_downstream_neuron_weight": 0,
-                    'info_button_submit': 0,
+                    'info_button_submit': 0,'info_button_download':0,'info_file_name':[],
                     "info_result": ['type', 'id', 'roi'], 'info_result_table': []},
      'NeuronConn': {'conn_brain_space': 'FlyEM', 'conn_version': 'v1.2.1', 'conn_roi': [], "conn_upstream_neuron": [],
                     "conn_upstream_neuron_weight": 0, 'conn_query_neuron': [], "conn_downstream_neuron": [],
                     "conn_downstream_neuron_weight": 0, 'conn_submit_button': 0, 'conn_clear_button': 0,
                     "conn_connection_data": [], 'upload-connection_data': [], 'conn_add_connection_button': 0,
-                    'pooled_connection_data': 0,
+                    'pooled_connection_data': 0,'conn_button_download':0,'conn_file_name':[],
                     'conn_nx_button': 0, 'conn_sk_button': 0, 'conn_nx_graph': go.Figure(),
                     'conn_sk_graph': go.Figure()},
      'NeuronSyn': {'syn_brain_space': "FlyEM", "syn_version": 'v1.2.1', "neuron_name": {},
@@ -89,7 +88,7 @@ def initialize_eFlyPlot_history():
                    'syn_upstream_neuron': [],'syn_upstream_neuron_weight': 0, "syn_query_neuron": [], 'syn_downstream_neuron': [],
                    'syn_downstream_neuron_weight': 0, 'syn_button_submit': 0, "neuropil": {},
                    'my-color-picker': dict(rgb={'r': 255, 'g': 255, 'b': 255, 'a': 1}), 'syn_button_reset': 0,
-                    'syn_button_clear': 0, "syn_graph": go.Figure(),
+                    'syn_button_clear': 0, "syn_graph": go.Figure(),'syn_button_download':0,'syn_file_name':[],
                    'camera-text': "", 'syn_button_add_neuropil': 0,'upload-synapse_data': {}, 'syn_button_add_synapse': 0,
                    'syn_search_query':{}
                    }
@@ -115,6 +114,7 @@ def get_tab_for_eFlyPlot_info(label="eFlyPlot"):
             dcc.Store(id='history-store',data= initialize_eFlyPlot_history()),
             dcc.Store(id='history-store-connection', data=initialize_eFlyPlot_history()),
             dcc.Store(id='history-store-synapse', data=initialize_eFlyPlot_history()),
+            dcc.Store(id='history-store-dendro',data=initialize_eFlyPlot_history()),
 
         dcc.Store(id='history-fig', data=initialize_eFlyPlot_fig_history())
     ])
@@ -184,6 +184,14 @@ def get_tab_for_basic_info(label="NeuronInfo"):
                 ]),
                 html.Div([html.Button('Submit', style={"height": "auto", "margin-bottom": "auto"},
                                       id='info_button_submit'), ]),
+                dcc.Store(id='info_name_list',data={'options':[]}),
+                dcc.Dropdown(
+                    id='info_download_dropdown',
+                    options=[],
+                    multi=True
+                ),
+                html.Button("Download", id="info_button_download"),
+                dcc.Download(id="info_download_xlsx"),
                 dash_table.DataTable(
                     id='info_result_table',
                     style_cell={'textAlign': 'left'},
@@ -286,6 +294,15 @@ def get_tab_for_neuron_connection(label="NeuronConn"):
                                     debounce=True, ), ]),
                 html.Div([html.Button('Submit', style={"height": "auto", "margin-bottom": "auto"},
                                       id='conn_submit_button'), ]),
+                dcc.Store(id='conn_name_list',data={'options':[]}),
+                dcc.Dropdown(
+                    id='conn_download_dropdown',
+                    options=[],
+                    multi=True
+                ),
+
+                html.Button("Download Excel", id="conn_button_download"),
+                dcc.Download(id="conn_download_xlsx"),
                 html.Div([html.Button('Clear connection data', style={"height": "auto", "margin-bottom": "auto"},
                                       id='conn_clear_button'), ]),
                 html.P(
@@ -293,7 +310,6 @@ def get_tab_for_neuron_connection(label="NeuronConn"):
                 html.Div(
                     [html.Button('Generate network configuration', style={"height": "auto", "margin-bottom": "auto"},
                                  id='conn_nx_button'), ]),
-                cyto.Cytoscape(id='conn_cyto', layout={'name': 'preset'}, elements=[{}]),
                 html.Div(
                     [html.Button('Generate sankey chart (acyclic)', style={"height": "auto", "margin-bottom": "auto"},
                                  id='conn_sk_button'), ]),
@@ -470,6 +486,14 @@ def get_tab_for_neuron_synapses(label="NeuronSyn",neuropil_options=[{'label':'CA
                 ]),
             html.Div([html.Button('Submit', style={"height": "auto", "margin-bottom": "auto"},
                                   id='syn_button_submit'), ]),
+            dcc.Store(id='syn_name_list',data={'options':[]}),
+            dcc.Dropdown(
+                    id='syn_download_dropdown',
+                    options=[],
+                    multi=True
+            ),
+            html.Button("Download Excel", id="syn_button_download"),
+            dcc.Download(id="syn_download_xlsx"),
             dcc.Upload(
                 id='upload-synapse_data',
                 children=html.Div([
@@ -554,12 +578,145 @@ def get_tab_for_neuron_synapses(label="NeuronSyn",neuropil_options=[{'label':'CA
                     # style={'width': '100%', 'height': 300},
                 ),
 
+
             ])
 
     ])])
     return tab
 
+def get_dendrogram():
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=random_x, y=random_y0,
+                             mode='lines',
+                             name='lines'))
+    fig.add_trace(go.Scatter(x=random_x, y=random_y1,
+                             mode='lines+markers',
+                             name='lines+markers'))
+    fig.add_trace(go.Scatter(x=random_x, y=random_y2,
+                             mode='markers', name='markers'))
 
+    fig.show()
+
+def get_tab_for_synapse_analysis():
+    tab = dcc.Tab(label="NeuSynAnalysis", children=[
+        dcc.Tabs(children=[
+            dcc.Tab(children=[
+            html.P("After obtaining synapses in NeuronSyn, the synapse distribution can be visualize here."),
+            html.P("Please specify which brain region you want to analyze."),
+            dcc.Dropdown(id='spatial_roi',
+                         options=[],
+                         ),
+            html.Img(id='Spatial_distribution')
+
+        ]),
+        dcc.Tab(label="SynDendrogram", children=[
+            html.P("Visualization of synaptic arrangement of single neuron!"),
+            html.P("<WARNING> "
+                   "1. Due to skeleton tracing issues, some neurons or part of neuron branches cannot present here.\n "
+                   "2. Currently, the synapse distance threshold is 3 um. If the synapse position is farer than threshold, the synapse will be discared.\n"
+                   ),
+            html.P("Target neuronId."),
+            dcc.Input(id="syn_dendrogram_neuronId", type="text", placeholder="input type {}".format("text"),
+                      debounce=True, ),
+            html.P("Target neuropil."),
+            dcc.Input(id="syn_dendrogram_synapse_neuropil", type="text", placeholder="input type {}".format("text"),
+                      debounce=True, ),
+            html.P("Synaptic cmaps for following files in order."),
+            dcc.Input(id="syn_dendrogram_synapse_cmap", type="text", placeholder="input type {}".format("text"),
+                      debounce=True, ),
+            html.Button('Draw syn-dendrogram', id='button_dendro'),
+            dcc.Dropdown(
+                id='dendro_download_dropdown',
+                options=[],
+                multi=True
+            ),
+            # dcc.Graph(id='syn_dendrogram', figure=go.Figure())
+            html.Img(id='syn_dendrogram')
+
+        ]),
+        dcc.Tab(label="Brain registration", children=[
+            html.P("Currently the brain registration function is offered by navis.\nPlease visit the following website to get more information: https://github.com/schlegelp/navis-flybrains\n"),
+            # dcc.Input(id="warping_xyz", type="text", placeholder="input type {}".format("text"),
+            #           debounce=True, ),
+            dcc.Upload(
+                id='upload-warping_data',
+                children=html.Div([
+                    'Drag and Drop or ',
+                    html.A('Select xyz Data Files (.xlsx)')
+                ]),
+                style={
+                    'width': '30%',
+                    'height': '60px',
+                    'lineHeight': '60px',
+                    'borderWidth': '1px',
+                    'borderStyle': 'dashed',
+                    'borderRadius': '5px',
+                    'textAlign': 'center',
+                    'margin': '10px'
+                },
+                # Allow multiple files to be uploaded
+                multiple=True
+            ),
+            dcc.Download(id="warp_download"),
+            html.Div([
+                html.P("Source brain"),
+                dcc.Dropdown(
+                    id='warping_source',
+                    options=[{'label': "FlyEM", 'value': 'FlyEM'},
+                             {'label': "FlyCircuit", 'value': 'FlyCircuit'},
+                             {'label': "FlyEM_um", 'value': 'FlyEM_um'},
+                             {'label': "FCWB", 'value': 'FCWB'},
+                             {'label': "JRC2018U", 'value': 'JRC2018U'},
+                             {'label': "JRC2018F", 'value': 'JRC2018F'},
+                             {'label': "JRC2018Fraw", 'value': 'JRC2018Fraw'},
+                             {'label': "vfb", 'value': 'vfb'},
+                             {'label': "FAFB", 'value': 'FAFB'}],
+                    value='FlyEM'
+                ),
+            ]),
+            html.Div([
+                html.P("Target brain"),
+                dcc.Dropdown(
+                    id='warping_target',
+                    options=[{'label': "FlyEM", 'value': 'FlyEM'},
+                             {'label': "FlyCircuit", 'value': 'FlyCircuit'},
+                             {'label': "FlyEM_um", 'value': 'FlyEM_um'},
+                             {'label': "FCWB", 'value': 'FCWB'},
+                             {'label': "JRC2018U", 'value': 'JRC2018U'},
+                             {'label': "JRC2018F", 'value': 'JRC2018F'},
+                             {'label': "JRC2018Fraw", 'value': 'JRC2018Fraw'},
+                             {'label': "vfb", 'value': 'vfb'},
+                             {'label': "FAFB", 'value': 'FAFB'}],
+                    value='FlyCircuit'
+                ),
+            ]),
+            html.Button('Start warping coordinates', id='button_warping'),
+        ]),
+                 ])
+    ])
+    return tab
+
+
+def get_tab_for_neuron_connection_analysis():
+    # tab = dcc.Tab(label="NeuConnAnalysis", children=[
+    #     # html.Div([
+    #     # dcc.Tab(label="Cytoscape", children=[
+    #     test_cyto.get_tab_cytoscape_layout(),
+    #     # ]),
+    #     # dcc.Tab(label="Correlation_matrix", children=[
+    #     #     html.P("Please specify your target neurons and we will analyze the connection correlations using connection data in your result which connects to your target neurons."),
+    #     #     dcc.Input(id="conn_ana_source", type="text", placeholder="input type {}".format("text"),
+    #     #               debounce=True, ), ]),
+    #     #     dcc.Dropdown(
+    #     #         id='conn_ana_correlation_type',
+    #     #         options=[{'label':"Pearson correlation",'value':'P'},{'label':"Cosine correlation",'value':'C'},{'label':"Jaccard correlation",'value':'J'}],
+    #     #         value='P'
+    #     #     ),
+    #     #     ])
+    #
+    # ])
+    tab =  test_cyto.get_tab_cytoscape_layout()
+    return tab
 
 if __name__ == '__main__':
     app = dash.Dash(__name__, prevent_initial_callbacks=True)
@@ -568,8 +725,9 @@ if __name__ == '__main__':
             get_tab_for_eFlyPlot_info(),
             get_tab_for_basic_info(),
             get_tab_for_neuron_connection(),
-            test_cyto.get_tab_cytoscape_layout(),
-            get_tab_for_neuron_synapses()
+            get_tab_for_neuron_connection_analysis(),
+            get_tab_for_neuron_synapses(),
+            get_tab_for_synapse_analysis()
         ])
     ])
     app.run_server(debug=True)
